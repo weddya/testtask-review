@@ -4,45 +4,61 @@ declare(strict_types = 1);
 
 namespace Raketa\BackendTestTask\Infrastructure;
 
+use Raketa\BackendTestTask\Exception\ConnectorException;
+use Raketa\BackendTestTask\Infrastructure\Configuration\RedisConfig;
 use Redis;
 use RedisException;
 
-class ConnectorFacade
+final class ConnectorFacade
 {
-    public string $host;
-    public int $port = 6379;
-    public ?string $password = null;
-    public ?int $dbindex = null;
+    private ?Connector $connector = null;
 
-    public $connector;
-
-    public function __construct($host, $port, $password, $dbindex)
-    {
-        $this->host = $host;
-        $this->port = $port;
-        $this->password = $password;
-        $this->dbindex = $dbindex;
+    public function __construct(
+        private readonly RedisConfig $config,
+    ) {
     }
 
-    protected function build(): void
+    public function getConnector(): Connector
+    {
+        if ($this->connector === null) {
+            $this->connector = $this->buildConnector();
+        }
+
+        return $this->connector;
+    }
+
+    private function buildConnector(): Connector
     {
         $redis = new Redis();
 
         try {
-            $isConnected = $redis->isConnected();
-            if (! $isConnected && $redis->ping('Pong')) {
-                $isConnected = $redis->connect(
-                    $this->host,
-                    $this->port,
-                );
-            }
-        } catch (RedisException) {
-        }
+            $connected = $redis->connect(
+                $this->config->host,
+                $this->config->port,
+                $this->config->timeout,
+            );
 
-        if ($isConnected) {
-            $redis->auth($this->password);
-            $redis->select($this->dbindex);
-            $this->connector = new Connector($redis);
+            if (!$connected) {
+                throw new ConnectorException('Failed to connect to Redis');
+            }
+
+            if ($this->config->password !== null) {
+                $authResult = $redis->auth($this->config->password);
+                if (!$authResult) {
+                    throw new ConnectorException('Failed to authenticate with Redis');
+                }
+            }
+
+            if ($this->config->database !== 0) {
+                $selectResult = $redis->select($this->config->database);
+                if (!$selectResult) {
+                    throw new ConnectorException('Failed to select Redis database');
+                }
+            }
+
+            return new Connector($redis);
+        } catch (RedisException $e) {
+            throw new ConnectorException('Redis connection failed', $e->getCode(), $e);
         }
     }
 }

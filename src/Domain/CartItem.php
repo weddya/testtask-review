@@ -7,11 +7,18 @@ namespace Raketa\BackendTestTask\Domain;
 final readonly class CartItem
 {
     public function __construct(
-        public string $uuid,
-        public string $productUuid,
-        public float $price,
-        public int $quantity,
+        private string $uuid,
+        private string $productUuid,
+        private float $price,
+        private int $quantity,
     ) {
+        if ($price < 0) {
+            throw new \InvalidArgumentException('Price cannot be negative');
+        }
+        
+        if ($quantity <= 0) {
+            throw new \InvalidArgumentException('Quantity must be greater than 0');
+        }
     }
 
     public function getUuid(): string
@@ -32,5 +39,10 @@ final readonly class CartItem
     public function getQuantity(): int
     {
         return $this->quantity;
+    }
+
+    public function getTotal(): float
+    {
+        return $this->price * $this->quantity;
     }
 }

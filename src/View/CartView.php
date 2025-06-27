@@ -5,54 +5,77 @@ declare(strict_types = 1);
 namespace Raketa\BackendTestTask\View;
 
 use Raketa\BackendTestTask\Domain\Cart;
-use Raketa\BackendTestTask\Repository\ProductRepository;
+use Raketa\BackendTestTask\Domain;
+use Raketa\BackendTestTask\Repository\Entity\Product;
 
-readonly class CartView
+final readonly class CartView
 {
-    public function __construct(
-        private ProductRepository $productRepository
-    ) {
+    public function __construct() {}
+
+    public function toArray(Cart $cart, array $products): array
+    {
+        return [
+            'uuid' => $cart->getUuid(),
+            'customer' => $this->formatCustomer($cart->getCustomer()),
+            'payment_method' => $cart->getPaymentMethod(),
+            'items' => $this->formatItems($cart->getItems(), $products),
+            'total' => $cart->getTotal(),
+            'item_count' => $cart->getItemCount(),
+        ];
     }
 
-    public function toArray(Cart $cart): array
+    private function formatCustomer(Domain\Customer $customer): array
     {
-        $data = [
-            'uuid' => $cart->getUuid(),
-            'customer' => [
-                'id' => $cart->getCustomer()->getId(),
-                'name' => implode(' ', [
-                    $cart->getCustomer()->getLastName(),
-                    $cart->getCustomer()->getFirstName(),
-                    $cart->getCustomer()->getMiddleName(),
-                ]),
-                'email' => $cart->getCustomer()->getEmail(),
-            ],
-            'payment_method' => $cart->getPaymentMethod(),
+        return [
+            'id' => $customer->getId(),
+            'name' => $customer->getFullName(),
+            'email' => $customer->getEmail(),
         ];
+    }
 
-        $total = 0;
-        $data['items'] = [];
-        foreach ($cart->getItems() as $item) {
-            $total += $item->getPrice() * $item->getQuantity();
-            $product = $this->productRepository->getByUuid($item->getProductUuid());
-
-            $data['items'][] = [
-                'uuid' => $item->getUuid(),
-                'price' => $item->getPrice(),
-                'total' => $total,
-                'quantity' => $item->getQuantity(),
-                'product' => [
-                    'id' => $product->getId(),
-                    'uuid' => $product->getUuid(),
-                    'name' => $product->getName(),
-                    'thumbnail' => $product->getThumbnail(),
-                    'price' => $product->getPrice(),
-                ],
-            ];
+    /**
+     * @param Domain\CartItem[] $items
+     * @param array<string, Product> $products
+     */
+    private function formatItems(array $items, array $products): array
+    {
+        if (empty($items)) {
+            return [];
         }
 
-        $data['total'] = $total;
+        return array_map(
+            fn(Domain\CartItem $item) => $this->formatItem($item, $products),
+            $items
+        );
+    }
 
-        return $data;
+    /**
+     * @param array<string, Product> $products
+     */
+    private function formatItem(Domain\CartItem $item, array $products): array
+    {
+        $product = $products[$item->getProductUuid()] ?? null;
+
+        $productData = $product ? [
+            'id' => $product->getId(),
+            'uuid' => $product->getUuid(),
+            'name' => $product->getName(),
+            'thumbnail' => $product->getThumbnail(),
+            'price' => $product->getPrice(),
+        ] : [
+            'id' => 0,
+            'uuid' => $item->getProductUuid(),
+            'name' => 'Product not available',
+            'thumbnail' => '',
+            'price' => 0.0,
+        ];
+
+        return [
+            'uuid' => $item->getUuid(),
+            'price' => $item->getPrice(),
+            'quantity' => $item->getQuantity(),
+            'total' => $item->getTotal(),
+            'product' => $productData,
+        ];
     }
 }

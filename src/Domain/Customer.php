@@ -13,6 +13,17 @@ final readonly class Customer
         private string $middleName,
         private string $email,
     ) {
+        if (empty($firstName)) {
+            throw new \InvalidArgumentException('First name cannot be empty');
+        }
+        
+        if (empty($lastName)) {
+            throw new \InvalidArgumentException('Last name cannot be empty');
+        }
+        
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new \InvalidArgumentException('Invalid email format');
+        }
     }
 
     public function getId(): int
@@ -38,5 +49,11 @@ final readonly class Customer
     public function getEmail(): string
     {
         return $this->email;
+    }
+
+    public function getFullName(): string
+    {
+        $nameParts = array_filter([$this->lastName, $this->firstName, $this->middleName]);
+        return implode(' ', $nameParts);
     }
 }
